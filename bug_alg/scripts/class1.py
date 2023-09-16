@@ -2,8 +2,6 @@
 
 # import ros stuff
 import rospy
-import time
-import datetime
 # import ros message
 from geometry_msgs.msg import Point, Twist
 from sensor_msgs.msg import LaserScan
@@ -26,23 +24,20 @@ initial_position_.x = rospy.get_param('initial_x')
 initial_position_.y = rospy.get_param('initial_y')
 initial_position_.z = 0
 #get the destination coordinates
-target_ = Point()
-target_.x = rospy.get_param('des_pos_x')
-target_.y = rospy.get_param('des_pos_y')
-target_.z = 0
+desired_position_ = Point()
+desired_position_.x = rospy.get_param('des_pos_x')
+desired_position_.y = rospy.get_param('des_pos_y')
+desired_position_.z = 0
 regions_ = None
 #states of robot during algorithm
-state_desc_ = ['forward', 'wall following', 'rotate to target', 'start', 'change local direction']
+state_desc_ = ['Go to point', 'wall following', 'checking leave point', 'start']
 state_ = 0
 count_state_time_ = 0 # seconds the robot is in a state
 count_loop_ = 0
-# 0 - forward
+# 0 - go to point
 # 1 - wall following
-# 2 - rotate to target
-# 3 - start position
-# 4 - change local direction
-list_hp_ = []  
-SWF = 1
+# 2 - checking leave point
+# 3 -start position
 
 # callbacks
 #robot movement callbacks
@@ -71,15 +66,16 @@ def clbk_laser(msg):
         'front':  min(min(min(msg.ranges[0:10]), min(msg.ranges[349:359])) , 10),
         'fright':  min(min(msg.ranges[306:341]), 10),
         'right':   min(min(msg.ranges[270:305]), 10),
-        'left45': msg.ranges[45] 
     }
 
 #state changer
-def change_state(state,SWF=None):
+def change_state(state):
     global state_, state_desc_
     global srv_client_wall_follower_, srv_client_go_to_point_
     global count_state_time_
-    count_state_time_ = 0
+
+    if not((state_ == 1 and state == 2) or (state_ == 2 and state == 1)):
+        count_state_time_ = 0
     state_ = state
     #informing user that the state has changed
     log = "state changed: %s" % state_desc_[state]
@@ -90,93 +86,33 @@ def change_state(state,SWF=None):
         resp = srv_client_wall_follower_(False)
     if state_ == 1:
         resp = srv_client_go_to_point_(False)
-        if SWF is not None and SWF == 1:
-            resp = srv_client_wall_follower_(True)
-        else:
-            resp = srv_client_wall_follower_(False)
+        resp = srv_client_wall_follower_(True)
     if state_ == 2:
         resp = srv_client_go_to_point_(False)
         resp = srv_client_wall_follower_(False)
     if state_ == 3:
         resp = srv_client_go_to_point_(False)
         resp = srv_client_wall_follower_(False)
-    
-#fucntion to calculate distance to line connecting start and finish
-def distance_to_line(p0):
-    # p0 is the current position
-    # p1 and p2 points define the line
-    global st_position_, target_
-    p1 = st_position_
-    p2 = target_
-    up_eq = math.fabs((p2.y - p1.y) * p0.x - (p2.x - p1.x) * p0.y + (p2.x * p1.y) - (p2.y * p1.x))
-    lo_eq = math.sqrt(pow(p2.y - p1.y, 2) + pow(p2.x - p1.x, 2))
-    distance = up_eq / lo_eq
-    
-    return distance
 
 #function to calculate distance betweeen two points
-def calc_distarts(point1, point2):
+def calc_dist_points(point1, point2):
     dist = math.sqrt((point1.y - point2.y)**2 + (point1.x - point2.x)**2)
     return dist    
-    
-def check_if_point_in_list(point, list_hp, i):
-    for p in list_hp:
-        if p[2] != i and p[0] is not None and calc_distarts(point, p[0]) < 0.1:
-            
-                return True
-    return False
-
- 			
-def check_last_leave_point_is_set(list_hp_, i):
-    for p in list_hp_:
-        if p[2] == i and p[1] == 'leave':
-            if p[0] is not None:
-                return True
-    return False
-    
-def get_last_hit_point(i, position_, list_hp_):
-    for p in list_hp_:
-        if p[2] == i and p[1] == 'hit':
-            if calc_distarts(p[0], position_) < 0.1:
-                return True
-    return False
 
 #funcdion to nprmalize angle
 def normalize_angle(angle):
     if(math.fabs(angle) > math.pi):
         angle = angle - (2 * math.pi * angle) / (math.fabs(angle))
     return angle
-    
 
 def main():
     # stating global parameters
-    global regions_, position_, target_, state_, yaw_, st_position_
+    global regions_, position_, desired_position_, state_, yaw_, st_position_
     global srv_client_go_to_point_, srv_client_wall_follower_
     global count_state_time_, count_loop_
-    global start
-    global list_hp_
-    global SWF
-    #global v
-    #global w
-    #global c_v
-    #global c_w
-    #v = c_v
-    #w = 0
-    list_hp_ = []
-    list_lp_ = []
-    SWF = 1
-    i = 0
-    need_to_return = 0
-    timer_hp = None
-    rospy.init_node('alg1')
-    Li = None
-    Hi = None
-    Q = calc_distarts(position_, target_)
-    log = "Calculated new Q %s" % Q
-    rospy.loginfo(log)
-    timer_hp = datetime.datetime.now()
-    OBSTACLES_COUNT = 0
-    POINTS = []
+    global st_point
+    
+    rospy.init_node('class11')
     
     #publisher to change velocities
     pub = rospy.Publisher('/cmd_vel', Twist, queue_size=1)
@@ -197,31 +133,27 @@ def main():
     # set robot position
     model_state = ModelState()
     model_state.model_name = 'turtlebot3_burger'
-    
-    change_state(3) #state -> start
-    log = "Starting"
-    rospy.loginfo(log)
+   # change state to start
+    change_state(3)
     
     st_position_ = position_
        
     #calculate the yaw to the destination point
-    desired_yaw = math.atan2(target_.y - position_.y, target_.x - position_.x)
+    desired_yaw = math.atan2(desired_position_.y - position_.y, desired_position_.x - position_.x)
     err_yaw = desired_yaw - yaw_
     
     #point the robot to the destination point
     while not math.fabs(err_yaw) <= math.pi / 90:
         twist_msg = Twist()
-        desired_yaw = math.atan2(target_.y - position_.y, target_.x - position_.x)
+        desired_yaw = math.atan2(desired_position_.y - position_.y, desired_position_.x - position_.x)
         err_yaw = desired_yaw - yaw_
         twist_msg.angular.z = 0.7 if err_yaw > 0 else -0.7
         pub.publish(twist_msg)
         twist_msg.angular.z = 0
         pub.publish(twist_msg)
     
-    
-    change_state(0) #state -> forward
-    log = "Moving forward"
-    rospy.loginfo(log)
+    # initialize going to the point
+    change_state(0)
     
     rate = rospy.Rate(20)
     #circle to change robot states
@@ -229,136 +161,50 @@ def main():
         if regions_ == None:
             continue
         #calculate distance to line (s-f)
-        distance_position_to_line = distance_to_line(position_)
+        # distance_position_to_line = distance_to_line(position_)
         
+        #check if robot arived at the dest point
+        if math.sqrt((desired_position_.y - position_.y)**2 + (desired_position_.x - position_.x)**2) < 0.15 :
+            twist_msg = Twist()
+            twist_msg.angular.z = 0
+            twist_msg.linear.x = 0
+            pub.publish(twist_msg)
+            log = "point reached"
+            rospy.loginfo(log)
+            exit(0)
         
-        
-        #FORWARD
-        if state_ == 0:
-            if count_state_time_ > 20:
-                POINTS.append(position_)
-            Q = calc_distarts(position_, target_)
-            log = "Calculated new Q %s" % Q
-            rospy.loginfo(log)
-            #target reached?
-            log = "Check if target reached"
-            rospy.loginfo(log)
-            if math.sqrt((target_.y - position_.y)**2 + (target_.x - position_.x)**2) < 0.15 :
-                twist_msg = Twist()
-                twist_msg.angular.z = 0
-                twist_msg.linear.x = 0
-                pub.publish(twist_msg)
-                log = "point reached"
-                rospy.loginfo(log)
-                RESULT_TIME = (datetime.datetime.now() - timer_hp)
-                exit(0)
-                
-            #obstacle hit?
-            log = "Check if obstacle hit"
-            rospy.loginfo(log)
+         #go to point state
+        elif state_ == 0:
+            #check if there is an obstacle forward
             if regions_['front'] > 0 and regions_['front'] < 0.25:
-                start = position_
-                i = i + 1
-                list_hp_.append([position_, 'hit', i])
-                list_hp_.append([[], 'leave', i])
-                log = "list_hp: %s" % list_hp_
+                st_point = position_
+                log = "st_point [%.4f; %.4f] | %.4f" % (st_point.x, st_point.y, calc_dist_points(st_point, desired_position_))
                 rospy.loginfo(log)
-                log = "Added hit point"
-                rospy.loginfo(log)
-                log = "hit is: %s" % Hi
-                rospy.loginfo(log)
-               
-                SWF = 1
-                
-                OBSTACLES_COUNT += 1
-                change_state(1) #state -> wall following
+                change_state(1)
         
-        #WALL FOLLOWING
+        #circumnavigate until either line is crossed again or closed loop was made then point cannot be reached
         elif state_ == 1:
-            if count_state_time_ > 20:
-                POINTS.append(position_)
-            Q = calc_distarts(position_, target_)
-            log = "Calculated new Q %s" % Q
-            rospy.loginfo(log)
-            log = "Check if need to return"
-            rospy.loginfo(log)
-            if need_to_return == 1:
-                log = "Need to return + check if last hit point reached"
-                rospy.loginfo(log)
-                if check_same_point(position_, list_hp_):
-                    log = "Reached last hit point"
-                    rospy.loginfo(log)
-                    need_to_return = 0
-            #target reached?
-            #log = "Check if target reached from wall following"
-            #rospy.loginfo(log)
-            if math.sqrt((target_.y - position_.y)**2 + (target_.x - position_.x)**2) < 0.15 :
-                twist_msg = Twist()
-                twist_msg.angular.z = 0
-                twist_msg.linear.x = 0
-                pub.publish(twist_msg)
-                log = "point reached"
-                rospy.loginfo(log)
-                RESULT_TIME = (datetime.datetime.now() - timer_hp)
-                exit(0)
+            # log = '%.4f' % (calc_dist_points(st_point, position_))
+            # rospy.loginfo(log)
             
-            log = "Check if encountered old points step %s" % i
-            rospy.loginfo(log)
-            if check_if_point_in_list(position_, list_hp_, i) and check_last_leave_point_is_set(list_hp_, i):
-                need_to_return = 1
-                log = "Reached old point"
-                rospy.loginfo(log)
 
-            #Robot is closer to T and way towards T is free
-            log = "Check if reached leave point"
-            rospy.loginfo(log)
+            if count_state_time_ > 20 and calc_dist_points(st_point, position_) < 0.1:
+               log = "point cannot be reached"
+               rospy.loginfo(log)
+               exit(0)
             
-            log = "calc_distarts(position_, target_) %s" % calc_distarts(position_, target_)
-            rospy.loginfo(log)
-            log = "Q %s" % Q
-            rospy.loginfo(log)
-            log = "calc_distarts(position_, target_)< Q) %s" % (calc_distarts(position_, target_)< Q)
-            rospy.loginfo(log)
+            elif count_state_time_ > 20 and calc_dist_points(position_, desired_position_) < calc_dist_points(st_point, desired_position_):
+                change_state(2)
 
-            
-            if count_state_time_ > 20 and \
-               calc_distarts(position_, target_)< Q:
-                    
-                    change_state(2) #state -> rotate to target
-            #current position is in list_hp
-            else:
-                log = "Not leave point"
-                rospy.loginfo(log)
-            log = "Check if reached last hit point so that target is not reachable"
-            rospy.loginfo(log)
-            log = "last hit point %s" % get_last_hit_point(i, position_, list_hp_)
-            rospy.loginfo(log)
-            if count_state_time_ > 20 and get_last_hit_point(i, position_, list_hp_):
-            
-                twist_msg = Twist()
-                twist_msg.angular.z = 0
-                twist_msg.linear.x = 0
-                pub.publish(twist_msg)
-                log = "point cannot be reached"
-                rospy.loginfo(log)
-                RESULT_TIME = (datetime.datetime.now() - timer_hp)
-                exit(0)
-                
-            #if check_if_point_in_list(position_, list_hp_) and (datetime.datetime.now() - timer_hp)> datetime.timedelta(seconds=1):
-            #    change_state(4) #state -> change local direction
-                
-            
-             
-        #ROTATE TO TARGET   
+
+        #checking if this point can be identified as leave point, looking in the direction of the finish basically        
         elif state_ == 2:
-                #rotate to target
-                log = "Rotating"
-                rospy.loginfo(log)
-                desired_yaw = math.atan2(target_.y - position_.y, target_.x - position_.x)
+                
+                desired_yaw = math.atan2(desired_position_.y - position_.y, desired_position_.x - position_.x)
                 err_yaw = desired_yaw - yaw_
                 while not math.fabs(err_yaw) <= math.pi / 90:
                     twist_msg = Twist()
-                    desired_yaw = math.atan2(target_.y - position_.y, target_.x - position_.x)
+                    desired_yaw = math.atan2(desired_position_.y - position_.y, desired_position_.x - position_.x)
                     err_yaw = desired_yaw - yaw_
                     twist_msg.angular.z = 0.7 if err_yaw > 0 else -0.7
                     pub.publish(twist_msg)
@@ -369,37 +215,25 @@ def main():
                 if regions_['front'] > 0.1 and regions_['front'] < 0.25:
                     log = "not the leave point, continuing circumnavigating"
                     rospy.loginfo(log)
-                    change_state(1) #state -> wall following
+                    change_state(1)
                 else:
-                 #if there is no obstacle right in front of the robot then we go towards the next obstacle
-                   
-                    log = "Setting leave point"
-                    rospy.loginfo(log)
-                    for p in list_hp_:
-                        if p[2] == i and p[1] == 'leave':
-                            p[0] = position_
-                    rospy.loginfo(log)
-                    
-                    log = "list_hp: %s" % list_hp_
-                    rospy.loginfo(log)
-                    change_state(0) #state -> forward
+                    #if there is no obstacle right in front of the robot then we go towards the next obstacle
+                    change_state(0)
                 
-
-        #CHANGE LOCAL DIRECTION
-        elif state_ == 4:
-                log = "Returning 180"
-                rospy.loginfo(log)
-                while regions_['left45'] > 0.4 :
-                    twist_msg = Twist()
-                    twist_msg.angular.z = 0.3
-                    pub.publish(twist_msg)
-                SWF = -1
-                change_state(1,SWF) #state -> wall following
+                
                 
         count_loop_ = count_loop_ + 1
         if count_loop_ == 20:
             count_state_time_ = count_state_time_ + 1
             count_loop_ = 0
+
+        if count_loop_ == 19:
+            log = '%d' % count_state_time_
+            rospy.loginfo(log)
+        # rospy.loginfo(count_loop_)
+        # if count_loop_ == 19:
+        #     log = '[%.4f; %.4f] %.4f | state %s' % (position_.x, position_.y, calc_dist_points(position_, desired_position_), state_)
+        #     rospy.loginfo(log)
             
         rate.sleep()
 
