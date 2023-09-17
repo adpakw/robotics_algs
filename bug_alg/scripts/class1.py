@@ -188,7 +188,7 @@ def main():
             # rospy.loginfo(log)
             
 
-            if count_state_time_ > 20 and calc_dist_points(st_point, position_) < 0.1:
+            if count_state_time_ > 20 and calc_dist_points(st_point, position_) < 0.2:
                log = "point cannot be reached"
                rospy.loginfo(log)
                exit(0)
