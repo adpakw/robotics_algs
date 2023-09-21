@@ -147,7 +147,15 @@ def main():
         twist_msg = Twist()
         desired_yaw = math.atan2(desired_position_.y - position_.y, desired_position_.x - position_.x)
         err_yaw = desired_yaw - yaw_
-        twist_msg.angular.z = 0.7 if err_yaw > 0 else -0.7
+        if math.fabs(err_yaw) > math.pi:
+            if err_yaw > 0:
+                err_yaw = err_yaw - 2 * math.pi
+            else: 
+                err_yaw = err_yaw + 2 * math.pi
+        if err_yaw > 0:
+            twist_msg.angular.z = 0.7
+        else: 
+            twist_msg.angular.z = -0.7
         pub.publish(twist_msg)
         twist_msg.angular.z = 0
         pub.publish(twist_msg)
@@ -206,7 +214,15 @@ def main():
                     twist_msg = Twist()
                     desired_yaw = math.atan2(desired_position_.y - position_.y, desired_position_.x - position_.x)
                     err_yaw = desired_yaw - yaw_
-                    twist_msg.angular.z = 0.7 if err_yaw > 0 else -0.7
+                    if math.fabs(err_yaw) > math.pi:
+                        if err_yaw > 0:
+                            err_yaw = err_yaw - 2 * math.pi
+                        else: 
+                            err_yaw = err_yaw + 2 * math.pi
+                    if err_yaw > 0:
+                        twist_msg.angular.z = 0.7
+                    else: 
+                        twist_msg.angular.z = -0.7
                     pub.publish(twist_msg)
                     twist_msg.angular.z = 0
                     pub.publish(twist_msg)

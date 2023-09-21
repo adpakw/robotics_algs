@@ -62,11 +62,13 @@ def clbk_odom(msg):
 def clbk_laser(msg):
     global regions_
     regions_ = {
-        'left':  min(min(msg.ranges[54:89]), 10),
-        'fleft': min(min(msg.ranges[18:53]), 10),
+        'bleft':  min(min(msg.ranges[103:135]), 10),
+        'left':  min(min(msg.ranges[57:102]), 10),
+        'fleft': min(min(msg.ranges[11:56]), 10),
         'front':  min(min(min(msg.ranges[0:10]), min(msg.ranges[349:359])) , 10),
-        'fright':  min(min(msg.ranges[306:341]), 10),
-        'right':   min(min(msg.ranges[270:305]), 10),
+        'fright':  min(min(msg.ranges[303:348]), 10),
+        'right':   min(min(msg.ranges[257:302]), 10),
+        'bright':  min(min(msg.ranges[225:256]), 10),
     }
 
 #state changer
@@ -158,13 +160,51 @@ def main():
     #calculate the yaw to the destination point
     desired_yaw = math.atan2(desired_position_.y - position_.y, desired_position_.x - position_.x)
     err_yaw = desired_yaw - yaw_
+    if math.fabs(err_yaw) > math.pi:
+        if err_yaw > 0:
+            err_yaw = err_yaw - 2 * math.pi
+        else: 
+            err_yaw = err_yaw + 2 * math.pi
+    degree = err_yaw * 180 / math.pi
+    log = "des_yaw %.4f" % degree
+    rospy.loginfo(log)
+
+    # if (degree < 10 and degree >= 0) or (degree > -10 and degree <= 0):
+    #     log = "dist front %.4f" % regions_['front']
+    #     rospy.loginfo(log)
+    # if degree <= 56 and degree > 10:
+    #     log = "dist fleft %.4f" % regions_['fleft']
+    #     rospy.loginfo(log)
+    # if degree <= 102 and degree > 56:
+    #     log = "dist left %.4f" % regions_['left']
+    #     rospy.loginfo(log)
+    # if degree <= 135 and degree > 102:
+    #     log = "dist bleft %.4f" % regions_['bleft']
+    #     rospy.loginfo(log)
+    # if degree <= -10 and degree > -56:
+    #     log = "dist fright %.4f" % regions_['fright']
+    #     rospy.loginfo(log)
+    # if degree <= -56 and degree > -102:
+    #     log = "dist right %.4f" % regions_['right']
+    #     rospy.loginfo(log)
+    # if degree <= -102 and degree >= -135:
+    #     log = "dist bleft %.4f" % regions_['bright']
+    #     rospy.loginfo(log)
     
     #point the robot to the destination point
     while not math.fabs(err_yaw) <= math.pi / 90:
         twist_msg = Twist()
         desired_yaw = math.atan2(desired_position_.y - position_.y, desired_position_.x - position_.x)
         err_yaw = desired_yaw - yaw_
-        twist_msg.angular.z = 0.7 if err_yaw > 0 else -0.7
+        if math.fabs(err_yaw) > math.pi:
+            if err_yaw > 0:
+                err_yaw = err_yaw - 2 * math.pi
+            else: 
+                err_yaw = err_yaw + 2 * math.pi
+        if err_yaw > 0:
+            twist_msg.angular.z = 0.7
+        else: 
+            twist_msg.angular.z = -0.7
         pub.publish(twist_msg)
         twist_msg.angular.z = 0
         pub.publish(twist_msg)
@@ -222,7 +262,15 @@ def main():
                 twist_msg = Twist()
                 desired_yaw = math.atan2(desired_position_.y - position_.y, desired_position_.x - position_.x)
                 err_yaw = desired_yaw - yaw_
-                twist_msg.angular.z = 0.7 if err_yaw > 0 else -0.7
+                if math.fabs(err_yaw) > math.pi:
+                    if err_yaw > 0:
+                        err_yaw = err_yaw - 2 * math.pi
+                    else: 
+                        err_yaw = err_yaw + 2 * math.pi
+                if err_yaw > 0:
+                    twist_msg.angular.z = 0.7
+                else: 
+                    twist_msg.angular.z = -0.7
                 pub.publish(twist_msg)
                 twist_msg.angular.z = 0
                 pub.publish(twist_msg)
@@ -265,18 +313,33 @@ def main():
             srv_client_go_to_point_(False)
             srv_client_wall_follower_(False)
             if counter == 25:
-                log = "%d | %.4f" % (count_steps,cur_step_dist)
-                rospy.loginfo(log)
+                # log = "%d | %.4f" % (count_steps,cur_step_dist)
+                # rospy.loginfo(log)
                 counter = 0
                 count_steps += 1
                 cur_step_dist = 0
                 change_state(state_)
 
+
+        # if regions_['fleft'] > 0.1 and regions_['fleft'] < 1.0:
+        #     counter += 1
+        #     twist_msg = Twist()
+        #     twist_msg.linear.x = 0
+        #     pub.publish(twist_msg)
+        #     srv_client_go_to_point_(False)
+        #     srv_client_wall_follower_(False)
+        #     log = "vision stop %.4f" % regions_['fleft']
+        #     rospy.loginfo(log)
+        #     exit(0)
+
+        
         count_loop_ = count_loop_ + 1
         if count_loop_ == 20:
             count_state_time_ = count_state_time_ + 1
             count_loop_ = 0
-
+            # log = "vision %.4f" % regions_['fleft']
+            # rospy.loginfo(log)
+        
         # if count_loop_ == 19:
         #     log = '%d' % count_state_time_
         #     rospy.loginfo(log)
