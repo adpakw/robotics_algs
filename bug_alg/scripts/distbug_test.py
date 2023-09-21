@@ -115,12 +115,23 @@ def normalize_angle(angle):
         angle = angle - (2 * math.pi * angle) / (math.fabs(angle))
     return angle
 
+list_hp = []
+len_hp = 0
+def check_last_hp(position):
+    global list_hp, len_hp
+    result = False
+    for i in range(len_hp-2):
+        if calc_dist_points(position, list_hp[i]) < 0.2:
+            result = True
+    return result
+
 def main():
     # stating global parameters
     global regions_, position_, desired_position_, state_, yaw_, st_position_
     global srv_client_go_to_point_, srv_client_wall_follower_
     global count_state_time_, count_loop_
     global st_point
+    global list_hp, len_hp
     
     rospy.init_node('distbug_step')
     
@@ -150,11 +161,10 @@ def main():
 
     #st
     prev_step_pos = position_
-    step = 0.2
+    step = 0.3
     cur_step_dist = 0
     count_steps = 0
     counter = 0
-
     #end
 
     #calculate the yaw to the destination point
@@ -166,9 +176,30 @@ def main():
         else: 
             err_yaw = err_yaw + 2 * math.pi
     degree = err_yaw * 180 / math.pi
-    log = "des_yaw %.4f" % degree
+    log = "st angle %.4f" % degree
     rospy.loginfo(log)
 
+    # if (degree < 10 and degree >= 0) or (degree > -10 and degree <= 0):
+    #     log = "dist front %.4f" % regions_['front']
+    #     rospy.loginfo(log)
+    # if degree <= 56 and degree > 10:
+    #     log = "dist fleft %.4f" % regions_['fleft']
+    #     rospy.loginfo(log)
+    # if degree <= 102 and degree > 56:
+    #     log = "dist left %.4f" % regions_['left']
+    #     rospy.loginfo(log)
+    # if degree <= 135 and degree > 102:
+    #     log = "dist bleft %.4f" % regions_['bleft']
+    #     rospy.loginfo(log)
+    # if degree <= -10 and degree > -56:
+    #     log = "dist fright %.4f" % regions_['fright']
+    #     rospy.loginfo(log)
+    # if degree <= -56 and degree > -102:
+    #     log = "dist right %.4f" % regions_['right']
+    #     rospy.loginfo(log)
+    # if degree <= -102 and degree >= -135:
+    #     log = "dist bleft %.4f" % regions_['bright']
+    #     rospy.loginfo(log)
     
     #point the robot to the destination point
     while not math.fabs(err_yaw) <= math.pi / 90:
@@ -237,14 +268,28 @@ def main():
                     counter = 0
                     count_steps += 1
                     cur_step_dist = 0
+
+                    if len_hp < 25:
+                        len_hp += 1
+                    else:
+                        list_hp.pop(0)
+                    list_hp.append(position_)
+                    for i in range(len_hp):
+                        log = 'list_hp %d [%.4f;%.4f]' % (i,list_hp[i].x,list_hp[i].y)
+                        rospy.loginfo(log)
+
                     change_state(2)
                     # srv_client_wall_follower_(True)
 
             if count_state_time_ > 20 and calc_dist_points(st_point, position_) < 0.2:
-               log = "point cannot be reached"
-               rospy.loginfo(log)
-               exit(0)
+                log = "point cannot be reached"
+                rospy.loginfo(log)
+                exit(0)
             
+            if count_state_time_ > 20 and check_last_hp(position_):
+                log = "point cannot be reacheddddddd"
+                rospy.loginfo(log)
+                exit(0)
             # elif count_state_time_ > 20 and calc_dist_points(position_, desired_position_) < calc_dist_points(st_point, desired_position_):
             #     change_state(2)
 
