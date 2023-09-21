@@ -100,9 +100,9 @@ def change_state(state):
     if state_ == 3:
         resp = srv_client_go_to_point_(False)
         resp = srv_client_wall_follower_(False)
-    if state_ == 4:
-        resp = srv_client_go_to_point_(False)
-        resp = srv_client_wall_follower_(False)
+    # if state_ == 4:
+    #     resp = srv_client_go_to_point_(False)
+    #     resp = srv_client_wall_follower_(False)
 
 #function to calculate distance betweeen two points
 def calc_dist_points(point1, point2):
@@ -150,11 +150,11 @@ def main():
 
     #st
     prev_step_pos = position_
-    step = 0.4
+    step = 0.2
     cur_step_dist = 0
     count_steps = 0
-    prev_state = -1
     counter = 0
+
     #end
 
     #calculate the yaw to the destination point
@@ -169,27 +169,6 @@ def main():
     log = "des_yaw %.4f" % degree
     rospy.loginfo(log)
 
-    # if (degree < 10 and degree >= 0) or (degree > -10 and degree <= 0):
-    #     log = "dist front %.4f" % regions_['front']
-    #     rospy.loginfo(log)
-    # if degree <= 56 and degree > 10:
-    #     log = "dist fleft %.4f" % regions_['fleft']
-    #     rospy.loginfo(log)
-    # if degree <= 102 and degree > 56:
-    #     log = "dist left %.4f" % regions_['left']
-    #     rospy.loginfo(log)
-    # if degree <= 135 and degree > 102:
-    #     log = "dist bleft %.4f" % regions_['bleft']
-    #     rospy.loginfo(log)
-    # if degree <= -10 and degree > -56:
-    #     log = "dist fright %.4f" % regions_['fright']
-    #     rospy.loginfo(log)
-    # if degree <= -56 and degree > -102:
-    #     log = "dist right %.4f" % regions_['right']
-    #     rospy.loginfo(log)
-    # if degree <= -102 and degree >= -135:
-    #     log = "dist bleft %.4f" % regions_['bright']
-    #     rospy.loginfo(log)
     
     #point the robot to the destination point
     while not math.fabs(err_yaw) <= math.pi / 90:
@@ -244,45 +223,104 @@ def main():
             # log = '%.4f' % (calc_dist_points(st_point, position_))
             # rospy.loginfo(log)
             
+            cur_step_dist += calc_dist_points(position_, prev_step_pos)
+            prev_step_pos = position_
+            if cur_step_dist > step - 0.02:
+                counter += 1
+                twist_msg = Twist()
+                twist_msg.linear.x = 0
+                pub.publish(twist_msg)
+                srv_client_wall_follower_(False)
+                if counter == 25:
+                    # log = "%d | %.4f" % (count_steps,cur_step_dist)
+                    # rospy.loginfo(log)
+                    counter = 0
+                    count_steps += 1
+                    cur_step_dist = 0
+                    change_state(2)
+                    # srv_client_wall_follower_(True)
+
             if count_state_time_ > 20 and calc_dist_points(st_point, position_) < 0.2:
                log = "point cannot be reached"
                rospy.loginfo(log)
                exit(0)
             
-            elif count_state_time_ > 20 and calc_dist_points(position_, desired_position_) < calc_dist_points(st_point, desired_position_):
-                change_state(2)
+            # elif count_state_time_ > 20 and calc_dist_points(position_, desired_position_) < calc_dist_points(st_point, desired_position_):
+            #     change_state(2)
 
 
         #checking if this point can be identified as leave point, looking in the direction of the finish basically        
         elif state_ == 2:
                 
+            # desired_yaw = math.atan2(desired_position_.y - position_.y, desired_position_.x - position_.x)
+            # err_yaw = desired_yaw - yaw_
+            # while not math.fabs(err_yaw) <= math.pi / 90:
+            #     twist_msg = Twist()
+            #     desired_yaw = math.atan2(desired_position_.y - position_.y, desired_position_.x - position_.x)
+            #     err_yaw = desired_yaw - yaw_
+            #     if math.fabs(err_yaw) > math.pi:
+            #         if err_yaw > 0:
+            #             err_yaw = err_yaw - 2 * math.pi
+            #         else: 
+            #             err_yaw = err_yaw + 2 * math.pi
+            #     if err_yaw > 0:
+            #         twist_msg.angular.z = 0.7
+            #     else: 
+            #         twist_msg.angular.z = -0.7
+            #     pub.publish(twist_msg)
+            #     twist_msg.angular.z = 0
+            #     pub.publish(twist_msg)
+
             desired_yaw = math.atan2(desired_position_.y - position_.y, desired_position_.x - position_.x)
             err_yaw = desired_yaw - yaw_
-            while not math.fabs(err_yaw) <= math.pi / 90:
-                twist_msg = Twist()
-                desired_yaw = math.atan2(desired_position_.y - position_.y, desired_position_.x - position_.x)
-                err_yaw = desired_yaw - yaw_
-                if math.fabs(err_yaw) > math.pi:
-                    if err_yaw > 0:
-                        err_yaw = err_yaw - 2 * math.pi
-                    else: 
-                        err_yaw = err_yaw + 2 * math.pi
+            if math.fabs(err_yaw) > math.pi:
                 if err_yaw > 0:
-                    twist_msg.angular.z = 0.7
+                    err_yaw = err_yaw - 2 * math.pi
                 else: 
-                    twist_msg.angular.z = -0.7
-                pub.publish(twist_msg)
-                twist_msg.angular.z = 0
-                pub.publish(twist_msg)
+                    err_yaw = err_yaw + 2 * math.pi
+            degree = err_yaw * 180 / math.pi
             
-            #when we turned to finish and theres an obstacle we continue to circumnavigate obstacle
-            if regions_['front'] > 0.1 and regions_['front'] < 0.25:
-                log = "not the leave point, continuing circumnavigating"
-                rospy.loginfo(log)
-                change_state(1)
+            
+            if (degree < 10 and degree >= 0) or (degree > -10 and degree <= 0):
+                reg = 'front'
+            if degree <= 56 and degree > 10:
+                reg = 'fleft'
+            if degree <= 102 and degree > 56:
+                reg = 'left'
+            if degree <= 135 and degree > 102:
+                reg = 'bleft'
+            if degree <= -10 and degree > -56:
+                reg = 'fright'
+            if degree <= -56 and degree > -102:
+                reg = 'right'
+            if degree <= -102 and degree >= -135:
+                reg = 'bright'
+
+            log = "dist %s %.4f" % (reg, regions_[reg])
+            rospy.loginfo(log)
+
+
+            if regions_[reg] > 0.5:
+                free_dist = 0.5
             else:
-                #if there is no obstacle right in front of the robot then we go towards the next obstacle
+                free_dist = regions_[reg]
+
+            if regions_[reg] > 0.23 and ((calc_dist_points(position_, desired_position_) - free_dist <= 0)\
+                or (calc_dist_points(position_, desired_position_) - free_dist <= calc_dist_points(prev_step_pos, desired_position_) - step)):
                 change_state(0)
+            else:
+                change_state(1)
+
+
+
+            # #when we turned to finish and theres an obstacle we continue to circumnavigate obstacle
+            # if regions_['front'] > 0.1 and regions_['front'] < 0.25:
+            #     log = "not the leave point, continuing circumnavigating"
+            #     rospy.loginfo(log)
+            #     change_state(1)
+            # else:
+            #     #if there is no obstacle right in front of the robot then we go towards the next obstacle
+            #     change_state(0)
 
         # stopping after step 
         # elif state_ == 4:
@@ -303,22 +341,22 @@ def main():
         #         rospy.loginfo(log)
         #         change_state(4)
         
-        cur_step_dist += calc_dist_points(position_, prev_step_pos)
-        prev_step_pos = position_
-        if cur_step_dist > step - 0.02:
-            counter += 1
-            twist_msg = Twist()
-            twist_msg.linear.x = 0
-            pub.publish(twist_msg)
-            srv_client_go_to_point_(False)
-            srv_client_wall_follower_(False)
-            if counter == 25:
-                # log = "%d | %.4f" % (count_steps,cur_step_dist)
-                # rospy.loginfo(log)
-                counter = 0
-                count_steps += 1
-                cur_step_dist = 0
-                change_state(state_)
+        # cur_step_dist += calc_dist_points(position_, prev_step_pos)
+        # prev_step_pos = position_
+        # if cur_step_dist > step - 0.02:
+        #     counter += 1
+        #     twist_msg = Twist()
+        #     twist_msg.linear.x = 0
+        #     pub.publish(twist_msg)
+        #     srv_client_go_to_point_(False)
+        #     srv_client_wall_follower_(False)
+        #     if counter == 25:
+        #         # log = "%d | %.4f" % (count_steps,cur_step_dist)
+        #         # rospy.loginfo(log)
+        #         counter = 0
+        #         count_steps += 1
+        #         cur_step_dist = 0
+        #         change_state(state_)
 
 
         # if regions_['fleft'] > 0.1 and regions_['fleft'] < 1.0:
