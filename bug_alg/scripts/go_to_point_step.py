@@ -30,7 +30,7 @@ dist_precision_ = 0.1
 pub = None
 
 # service callbacks
-def go_to_point_switch(req):
+def go_to_point_switch_step(req):
     global active_
     active_ = req.data
     res = SetBoolResponse()
@@ -130,7 +130,7 @@ def main():
     
     sub_odom = rospy.Subscriber('/odom', Odometry, clbk_odom)
     
-    srv = rospy.Service('go_to_point_switch', SetBool, go_to_point_switch)
+    srv = rospy.Service('go_to_point_switch_step', SetBool, go_to_point_switch_step)
     
     rate = rospy.Rate(40)
     
@@ -138,6 +138,7 @@ def main():
     desired_yaw = math.atan2(desired_position_.y - position_.y, desired_position_.x - position_.x)
     err_yaw = desired_yaw - yaw_
     
+
     while not math.fabs(err_yaw) <= math.pi / 90:
         twist_msg = Twist()
         desired_yaw = math.atan2(desired_position_.y - position_.y, desired_position_.x - position_.x)
