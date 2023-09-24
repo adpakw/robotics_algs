@@ -189,3 +189,26 @@ distbug_step:
 make {алгоритм}
 (КОНЕЦ)
 
+
+
+
+(Доп. инфа по алгоритмам)
+Заметил, что баги в начале работы, когда поварачиваются к точке поварачиваютсчя не по оптимальному пути(угол их поворота мог быть больше 180 градусов, например надо было повернуться на угол вправо на 50 градусов, а робот мог повернуться через лево на 310 градусов).
+надо было чуть переписать go_to_point.py и часть в багах где робот поварачивается к точке, в bug2.py это строчки 158-165 (исправленные 158-173) 
+Код:
+while not math.fabs(err_yaw) <= math.pi / 90:
+  twist_msg = Twist()
+  desired_yaw = math.atan2(desired_position_.y - position_.y, desired_position_.x - position_.x)
+  err_yaw = desired_yaw - yaw_
+  if math.fabs(err_yaw) > math.pi:
+      if err_yaw > 0:
+          err_yaw = err_yaw - 2 * math.pi
+      else: 
+          err_yaw = err_yaw + 2 * math.pi
+  if err_yaw > 0:
+      twist_msg.angular.z = 0.7
+  else: 
+      twist_msg.angular.z = -0.7
+  pub.publish(twist_msg)
+  twist_msg.angular.z = 0
+  pub.publish(twist_msg)
